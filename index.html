@@ -1,244 +1,168 @@
-<!DOCTYPE html>
-<html lang="id">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Timer Boss Respawn</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-</head>
-<body class="bg-gray-900 text-gray-100 min-h-screen">
-    <div class="container mx-auto px-4 py-8 max-w-4xl">
-        <header class="text-center mb-8">
-            <h1 class="text-3xl md:text-4xl font-bold text-yellow-400 mb-2 flex items-center justify-center gap-3">
-                <i class="fa-solid fa-clock"></i> Timer Boss Respawn
-            </h1>
-            <p class="text-gray-400">Sinkron 100% dengan Bot Discord</p>
-        </header>
+<script>
+    let bossInterval = [];
+    let bossFixed = [];
 
-        <div id="status" class="text-center text-sm text-gray-500 mb-4">Memuat data terbaru...</div>
+    const BATAS_ALARM_10M = 10;
+    const BATAS_ALARM_5M = 5;
+    const LAMA_ALARM_DETIK = 10;
+    const SUDAH_ALARM = new Set();
 
-        <div id="bossList" class="grid gap-4">
-            <div class="text-center text-gray-400 py-10">Menyiapkan jadwal...</div>
-        </div>
+    const JSON_URL = "https://raw.githubusercontent.com/ferdianto9992-rgb/BotDiscord2/main/database.json";
 
-        <footer class="text-center text-gray-500 text-sm mt-10">
-            Data diperbarui setiap 30 detik • Sumber: Database Bot Discord
-        </footer>
-    </div>
+    function parseWIB(dateStr) {
+        if (!dateStr) return null;
+        const d = new Date(dateStr);
+        return isNaN(d.getTime()) ? null : d;
+    }
 
-    <script>
-        let bossInterval = [];
-        let bossFixed = [];
-        
-        // ⚙️ PENGATURAN
-        const BATAS_ALARM_10M = 10;
-        const BATAS_ALARM_5M = 5;
-        const LAMA_ALARM_DETIK = 10;
-        const SUDAH_ALARM = new Set();
+    function getNextFixedTime(hariTujuan, jamTujuan, menitTujuan) {
+        const sekarang = new Date();
+        const waktu = new Date(sekarang);
+        waktu.setHours(jamTujuan, menitTujuan, 0, 0);
 
-        // 🔗 Link Database Asli
-        const JSON_URL = "https://raw.githubusercontent.com/ferdianto9992-rgb/BotDiscord2/main/database.json";
-
-        // 🖼️ Logo Boss
-        const bossLogos = {
-            "Venatus": "https://i.imgur.com/yHNzBn5.png",
-            "Viorent": "https://i.imgur.com/TswLUyO.png",
-            "LadyDalia": "https://i.imgur.com/Ymj0pme.png",
-            "Ego": "https://i.imgur.com/GCpkvSV.png",
-            "Shuliar": "https://i.imgur.com/WJth2tj.png",
-            "Larba": "https://i.imgur.com/qU8cRSB.png",
-            "Catena": "https://i.imgur.com/ohqX4Nb.png",
-            "Livera": "https://i.imgur.com/tFk6gsk.png",
-            "Undomiel": "https://i.imgur.com/0GGCNSX.png",
-            "Araneo": "https://i.imgur.com/dEVVKXQ.png",
-            "Wannitas": "https://i.imgur.com/tU8BVxj.png",
-            "Metus": "https://i.imgur.com/SuI2aF9.png",
-            "Duplican": "https://i.imgur.com/t2PWifB.png",
-            "BaronBraudmore": "https://i.imgur.com/or3ALPa.png",
-            "Gareth": "https://i.imgur.com/VM84PLk.png",
-            "Amentis": "https://i.imgur.com/hUNJOmi.png",
-            "Titore": "https://i.imgur.com/W32BUjq.png",
-            "GeneralAquleus": "https://i.imgur.com/oFBMgUH.png",
-            "Generalaquelus": "https://i.imgur.com/oFBMgUH.png",
-            "Ordo": "https://i.imgur.com/WpLtlty.png",
-            "Asta": "https://i.imgur.com/69XDCoj.png",
-            "Secreta": "https://i.imgur.com/69XDCoj.png",
-            "Supore": "https://i.imgur.com/syRfEwZ.png",
-            "Clemantis": "https://i.imgur.com/go33dw7.png",
-            "Thymele": "https://i.imgur.com/WJth2tj.png",
-            "Libitina": "https://i.imgur.com/3GLGwuh.png",
-            "Saphirus": "https://i.imgur.com/846DHtQ.png",
-            "Neutro": "https://i.imgur.com/DokfQus.png",
-            "Rakajeth": "https://i.imgur.com/2o62mvK.png",
-            "Auraq": "https://i.imgur.com/R4mb23X.png",
-            "Roderick": "https://i.imgur.com/S2mUejm.png",
-            "Milavy": "https://i.imgur.com/rgVWDrk.png",
-            "Ringor": "https://i.imgur.com/wg3j2wF.png",
-            "Chainflock": "https://i.imgur.com/GDiYhBn.png",
-            "Tumier": "https://i.imgur.com/DyhlgGo.png",
-            "Benji": "https://i.imgur.com/BqkyQNy.png"
-        };
-
-        // 📋 Daftar Boss Interval
-        const listInterval = [
-            "Venatus", "Viorent", "LadyDalia", "Ego", "Shuliar", "Larba", "Catena",
-            "Livera", "Undomiel", "Araneo", "Wannitas", "Metus", "Duplican",
-            "BaronBraudmore", "Gareth", "Amentis", "Titore", "GeneralAquleus",
-            "Generalaquelus", "Ordo", "Asta", "Secreta", "Supore"
-        ];
-
-        // 📋 Daftar Boss Tetap
-        const listFixed = [
-            { nama: "Clemantis", hari: 1, jam: 10, menit: 30 },
-            { nama: "Thymele", hari: 1, jam: 18, menit: 0 },
-            { nama: "Libitina", hari: 1, jam: 20, menit: 0 },
-            { nama: "Saphirus", hari: 2, jam: 10, menit: 30 },
-            { nama: "Neutro", hari: 2, jam: 18, menit: 0 },
-            { nama: "Rakajeth", hari: 2, jam: 21, menit: 0 },
-            { nama: "Thymele", hari: 3, jam: 10, menit: 30 },
-            { nama: "Auraq", hari: 3, jam: 20, menit: 0 },
-            { nama: "Neutro", hari: 4, jam: 10, menit: 30 },
-            { nama: "Clemantis", hari: 4, jam: 18, menit: 0 },
-            { nama: "Roderick", hari: 5, jam: 18, menit: 0 },
-            { nama: "Auraq", hari: 5, jam: 21, menit: 0 },
-            { nama: "Milavy", hari: 6, jam: 14, menit: 0 },
-            { nama: "Ringor", hari: 6, jam: 16, menit: 0 },
-            { nama: "Libitina", hari: 6, jam: 20, menit: 0 },
-            { nama: "Chainflock", hari: 0, jam: 14, menit: 0 },
-            { nama: "Saphirus", hari: 0, jam: 16, menit: 0 },
-            { nama: "Rakajeth", hari: 0, jam: 18, menit: 0 },
-            { nama: "Tumier", hari: 0, jam: 18, menit: 0 },
-            { nama: "Benji", hari: 0, jam: 20, menit: 0 }
-        ];
-
-        function putarAlarm(namaBoss, pesan) {
-            if (SUDAH_ALARM.has(pesan)) return;
-            SUDAH_ALARM.add(pesan);
-            const audio = new Audio("https://assets.mixkit.co/sfx/preview/mixkit-alarm-digital-notification-933.mp3");
-            audio.volume = 0.7;
-            audio.loop = true;
-            audio.play().catch(e => console.log("Izinkan suara:", e));
-            tampilkanNotifikasi(pesan);
-            setTimeout(() => { audio.pause(); audio.currentTime = 0; }, LAMA_ALARM_DETIK * 1000);
-            setTimeout(() => SUDAH_ALARM.delete(pesan), 15 * 60 * 1000);
+        let selisihHari = hariTujuan - sekarang.getDay();
+        if (selisihHari < 0 || (selisihHari === 0 && waktu <= sekarang)) {
+            selisihHari += 7;
         }
 
-        function tampilkanNotifikasi(teks) {
-            const notif = document.createElement('div');
-            notif.className = "fixed top-5 right-5 bg-yellow-500 text-black font-bold px-5 py-3 rounded-lg shadow-lg z-50 animate-pulse";
-            notif.innerHTML = teks;
-            document.body.appendChild(notif);
-            setTimeout(() => notif.remove(), 12000);
+        waktu.setDate(sekarang.getDate() + selisihHari);
+        return waktu;
+    }
+
+    function putarAlarm(namaBoss, pesan) {
+        if (SUDAH_ALARM.has(pesan)) return;
+        SUDAH_ALARM.add(pesan);
+
+        const audio = new Audio("https://assets.mixkit.co/sfx/preview/mixkit-alarm-digital-notification-933.mp3");
+        audio.volume = 0.7;
+        audio.loop = true;
+        audio.play().catch(e => console.log("Izinkan suara:", e));
+
+        tampilkanNotifikasi(pesan);
+
+        setTimeout(() => {
+            audio.pause();
+            audio.currentTime = 0;
+        }, LAMA_ALARM_DETIK * 1000);
+
+        setTimeout(() => SUDAH_ALARM.delete(pesan), 15 * 60 * 1000);
+    }
+
+    function tampilkanNotifikasi(teks) {
+        const notif = document.createElement('div');
+        notif.className = "fixed top-5 right-5 bg-yellow-500 text-black font-bold px-5 py-3 rounded-lg shadow-lg z-50 animate-pulse";
+        notif.innerHTML = teks;
+        document.body.appendChild(notif);
+        setTimeout(() => notif.remove(), 12000);
+    }
+
+    async function loadData() {
+        try {
+            const res = await fetch(JSON_URL + "?t=" + Date.now());
+            if (!res.ok) throw new Error("Gagal baca data");
+            const data = await res.json();
+            prosesData(data.boss_respawn || {});
+            document.getElementById('status').textContent = "✅ Data terbaru dimuat";
+        } catch (err) {
+            document.getElementById('status').innerHTML = `❌ ${err.message}`;
+        }
+    }
+
+    function prosesData(dataMentah) {
+        bossInterval = [];
+        const sekarang = new Date();
+
+        for (const [nama, info] of Object.entries(dataMentah)) {
+            if (!info) continue;
+            if (!listInterval.includes(nama)) continue;
+            if (!info.terakhir_muncul) continue;
+            if (!info.interval_jam) continue;
+
+            const waktuMati = parseWIB(info.terakhir_muncul);
+            if (!waktuMati) continue;
+
+            const intervalJam = Number(info.interval_jam);
+            if (isNaN(intervalJam) || intervalJam <= 0) continue;
+
+            let waktuSpawn = new Date(waktuMati.getTime() + intervalJam * 3600000);
+
+            while (waktuSpawn < sekarang) {
+                waktuSpawn = new Date(waktuSpawn.getTime() + intervalJam * 3600000);
+            }
+
+            bossInterval.push({
+                nama,
+                waktu: waktuSpawn,
+                interval: intervalJam,
+                isFixed: false
+            });
         }
 
-        function getNextFixedTime(hariTujuan, jamTujuan, menitTujuan) {
-            const sekarang = new Date();
-            const waktu = new Date(sekarang);
-            waktu.setHours(jamTujuan, menitTujuan, 0, 0);
-            let selisihHari = hariTujuan - sekarang.getDay();
-            if (selisihHari < 0 || (selisihHari === 0 && waktu <= sekarang)) selisihHari += 7;
-            waktu.setDate(sekarang.getDate() + selisihHari);
-            return waktu;
-        }
+        bossInterval.sort((a, b) => a.waktu - b.waktu);
 
-        async function loadData() {
-            try {
-                const res = await fetch(JSON_URL + "?t=" + Date.now());
-                if (!res.ok) throw new Error("Gagal baca data");
-                const data = await res.json();
-                prosesData(data.boss_respawn);
-                document.getElementById('status').textContent = "✅ Data terbaru dimuat";
-            } catch (err) {
-                document.getElementById('status').innerHTML = `❌ ${err.message}`;
+        bossFixed = listFixed.map(bos => ({
+            nama: bos.nama,
+            waktu: getNextFixedTime(bos.hari, bos.jam, bos.menit),
+            interval: "Tetap",
+            isFixed: true
+        }));
+
+        renderTampilan();
+    }
+
+    function renderTampilan() {
+        const wadah = document.getElementById('bossList');
+        const sekarang = new Date();
+        const batas10m = BATAS_ALARM_10M * 60 * 1000;
+        const batas5m = BATAS_ALARM_5M * 60 * 1000;
+
+        const semuaBoss = [...bossFixed, ...bossInterval];
+
+        for (const bos of semuaBoss) {
+            const selisihMs = bos.waktu - sekarang;
+            if (selisihMs > 0 && selisihMs <= batas5m) {
+                putarAlarm(bos.nama, `⚠️ ${bos.nama} muncul dalam 5 menit!`);
+            } else if (selisihMs > 5 * 60000 && selisihMs <= batas10m) {
+                putarAlarm(bos.nama, `⏰ ${bos.nama} muncul dalam 10 menit!`);
             }
         }
 
-        function prosesData(dataMentah) {
-            bossInterval = [];
-            const sekarang = new Date();
+        const daftarTampil = [...semuaBoss].sort((a, b) => a.waktu - b.waktu);
 
-            // ✅ LOGIKA BARU: SAMA PERSIS DENGAN BOT
-            for (const [nama, info] of Object.entries(dataMentah)) {
-                if (!info) continue;
-                if (!listInterval.includes(nama)) continue;
-                if (!info.terakhir_muncul || info.terakhir_muncul === null) continue;
-
-                // Ambil waktu mentah dari database
-                const waktuMati = new Date(info.terakhir_muncul);
-                const intervalJam = info.interval_jam;
-                const intervalMs = intervalJam * 3600000;
-
-                // Hitung waktu spawn berikutnya
-                let waktuSpawn = new Date(waktuMati.getTime() + intervalMs);
-
-                // Lompat ke jadwal berikutnya jika sudah lewat
-                while (waktuSpawn < sekarang) {
-                    waktuSpawn = new Date(waktuSpawn.getTime() + intervalMs);
-                }
-
-                // Langsung gunakan waktu ini, tidak ada konversi tambahan
-                bossInterval.push({
-                    nama: nama,
-                    waktu: waktuSpawn,
-                    interval: intervalJam,
-                    isFixed: false
-                });
-            }
-
-            // Urutkan dari yang paling dekat
-            bossInterval.sort((a, b) => a.waktu - b.waktu);
-
-            // Proses boss tetap
-            bossFixed = [];
-            for (const bos of listFixed) {
-                const waktuBerikutnya = getNextFixedTime(bos.hari, bos.jam, bos.menit);
-                bossFixed.push({ nama: bos.nama, waktu: waktuBerikutnya, interval: "Tetap", isFixed: true });
-            }
-
-            renderTampilan();
+        if (!daftarTampil.length) {
+            wadah.innerHTML = `<div class="text-center text-gray-400 py-10">Belum ada jadwal tersedia</div>`;
+            return;
         }
 
-        function renderTampilan() {
-            const wadah = document.getElementById('bossList');
-            const sekarang = new Date();
-            const batas10m = BATAS_ALARM_10M * 60 * 1000;
-            const batas5m = BATAS_ALARM_5M * 60 * 1000;
+        wadah.innerHTML = daftarTampil.map(bos => {
+            const selisihMs = Math.max(0, bos.waktu - sekarang);
+            const jam = Math.floor(selisihMs / 3600000);
+            const menit = Math.floor((selisihMs % 3600000) / 60000);
+            const detik = Math.floor((selisihMs % 60000) / 1000);
 
-            const semuaBoss = [...bossFixed, ...bossInterval];
+            const strWIB = bos.waktu.toLocaleTimeString('id-ID', {
+                timeZone: 'Asia/Jakarta',
+                hour: '2-digit',
+                minute: '2-digit',
+                hour12: false
+            });
 
-            for (const bos of semuaBoss) {
-                const selisihMs = bos.waktu - sekarang;
-                if (selisihMs > 0 && selisihMs <= batas10m && selisihMs > batas5m) {
-                    putarAlarm(bos.nama, `⏰ ${bos.nama} muncul dalam 10 menit!`);
-                } else if (selisihMs > 0 && selisihMs <= batas5m) {
-                    putarAlarm(bos.nama, `⚠️ ${bos.nama} muncul dalam 5 menit!`);
-                }
-            }
+            const strPHT = bos.waktu.toLocaleTimeString('id-ID', {
+                timeZone: 'Asia/Manila',
+                hour: '2-digit',
+                minute: '2-digit',
+                hour12: false
+            });
 
-            const daftarTampil = semuaBoss.sort((a, b) => a.waktu - b.waktu);
-            if (!daftarTampil.length) {
-                wadah.innerHTML = `<div class="text-center text-gray-400 py-10">Belum ada jadwal tersedia</div>`;
-                return;
-            }
+            const mundur = selisihMs <= 0 ? "✅ SUDAH MUNCUL!" : `${jam}j ${menit.toString().padStart(2,'0')}m ${detik.toString().padStart(2,'0')}s`;
+            const warna = selisihMs <= 0 ? "text-green-400" : selisihMs <= 5*60000 ? "text-red-400" : selisihMs <= 10*60000 ? "text-orange-400" : "text-yellow-300";
+            const logo = bossLogos[bos.nama] || "https://cdn-icons-png.flaticon.com/512/1698/1698535.png";
+            const label = bos.isFixed
+                ? `<span class="text-xs bg-purple-700 px-2 py-0.5 rounded text-purple-100">FIXED</span>`
+                : `<span class="text-xs bg-blue-700 px-2 py-0.5 rounded text-blue-100">INTERVAL</span>`;
+            const garis = bos.isFixed ? "border-purple-500" : "border-blue-500";
 
-            wadah.innerHTML = daftarTampil.map(bos => {
-                const selisihMs = Math.max(0, bos.waktu - sekarang);
-                const jam = Math.floor(selisihMs / 3600000);
-                const menit = Math.floor((selisihMs % 3600000) / 60000);
-                const detik = Math.floor((selisihMs % 60000) / 1000);
-
-                // Tampilkan langsung sesuai zona waktu perangkat = WIB
-                const strWIB = bos.waktu.toLocaleTimeString('id-ID', { timeZone: 'Asia/Jakarta', hour:'2-digit', minute:'2-digit', hour12: false });
-                const strPHT = bos.waktu.toLocaleTimeString('id-ID', { timeZone: 'Asia/Manila', hour:'2-digit', minute:'2-digit', hour12: false });
-
-                const mundur = selisihMs <= 0 ? "✅ SUDAH MUNCUL!" : `${jam}j ${menit.toString().padStart(2,'0')}m ${detik.toString().padStart(2,'0')}s`;
-                const warna = selisihMs <= 0 ? "text-green-400" : selisihMs <= 5*60000 ? "text-red-400" : selisihMs <=10*60000 ? "text-orange-400" : "text-yellow-300";
-                const logo = bossLogos[bos.nama] || "https://cdn-icons-png.flaticon.com/512/1698/1698535.png";
-                const label = bos.isFixed ? `<span class="text-xs bg-purple-700 px-2 py-0.5 rounded text-purple-100">FIXED</span>` : `<span class="text-xs bg-blue-700 px-2 py-0.5 rounded text-blue-100">INTERVAL</span>`;
-                const garis = bos.isFixed ? "border-purple-500" : "border-blue-500";
-
-                return `
+            return `
                 <div class="bg-gray-800 rounded-lg p-5 shadow-md border-l-4 ${garis} flex items-center gap-4">
                     <img src="${logo}" alt="${bos.nama}" class="w-16 h-16 object-contain rounded-md bg-gray-700 p-1">
                     <div class="flex-1">
@@ -252,12 +176,10 @@
                         <p class="text-lg font-bold ${warna} whitespace-nowrap">${mundur}</p>
                     </div>
                 </div>`;
-            }).join('');
-        }
+        }).join('');
+    }
 
-        loadData();
-        setInterval(renderTampilan, 1000);
-        setInterval(loadData, 30000);
-    </script>
-</body>
-</html>
+    loadData();
+    setInterval(renderTampilan, 1000);
+    setInterval(loadData, 30000);
+</script>
