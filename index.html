@@ -13,7 +13,7 @@
             <h1 class="text-3xl md:text-4xl font-bold text-yellow-400 mb-2 flex items-center justify-center gap-3">
                 <i class="fa-solid fa-clock"></i> Timer Boss Respawn
             </h1>
-            <p class="text-gray-400">Sinkron dengan Bot Discord • Hanya Tampilan</p>
+            <p class="text-gray-400">Sinkron Bot Discord • Tampilan +20 Menit</p>
         </header>
 
         <div id="status" class="text-center text-sm text-gray-500 mb-4">Memuat data terbaru...</div>
@@ -31,16 +31,14 @@
         let bossInterval = [];
         let bossFixed = [];
         
-        // ✅ Pengaturan Alarm
+        // ⚙️ PENGATURAN UTAMA
+        const SELISIH_MENIT = 20; // Hanya tambah ini saja
         const BATAS_ALARM_10M = 10;
         const BATAS_ALARM_5M = 5;
         const LAMA_ALARM_DETIK = 10;
         const SUDAH_ALARM = new Set();
 
-        // ⚙️ PENYESUAIAN WAKTU HANYA DI TAMPILAN (+20 menit)
-        const SELISIH_MENIT = 20;
-
-        // 🔗 Tautan ke database asli
+        // 🔗 Link Database Asli
         const JSON_URL = "https://raw.githubusercontent.com/ferdianto9992-rgb/BotDiscord2/main/database.json";
 
         // 🖼️ Logo Boss
@@ -162,38 +160,40 @@
             const sekarang = new Date();
 
             for (const [nama, info] of Object.entries(dataMentah)) {
-                // ✅ Pengecekan diperbaiki agar Titore tidak terlewat
-                if (!info || info.terakhir_muncul === null || !listInterval.includes(nama)) continue;
+                // ✅ Pengecekan disederhanakan agar Titore tidak terlewat
+                if (!info || !listInterval.includes(nama)) continue;
+                if (!info.terakhir_muncul) continue;
 
+                // ✅ Ambil waktu asli dari database
                 const waktuMatiUTC = new Date(info.terakhir_muncul);
                 const intervalMs = info.interval_jam * 3600000;
 
-                // ✅ Konversi ke WIB dulu, baru tambah 20 menit
-                let waktuSpawnUTC = new Date(waktuMatiUTC.getTime() + intervalMs);
-                let waktuSpawnWIB = new Date(waktuSpawnUTC.getTime() + 7 * 3600000); // +7 jam ke WIB
-                waktuSpawnWIB = new Date(waktuSpawnWIB.getTime() + SELISIH_MENIT * 60 * 1000);
+                // ✅ Hitung waktu spawn dasar
+                let waktuSpawn = new Date(waktuMatiUTC.getTime() + intervalMs);
 
-                // ✅ Jika sudah lewat, lompat ke jadwal berikutnya
-                while (waktuSpawnWIB < sekarang) {
-                    waktuSpawnUTC = new Date(waktuSpawnUTC.getTime() + intervalMs);
-                    waktuSpawnWIB = new Date(waktuSpawnUTC.getTime() + 7 * 3600000 + SELISIH_MENIT * 60 * 1000);
+                // ✅ Tambah HANYA 20 menit saja, tidak ada perubahan zona waktu tambahan
+                waktuSpawn = new Date(waktuSpawn.getTime() + SELISIH_MENIT * 60 * 1000);
+
+                // ✅ Lompat ke jadwal berikutnya jika sudah lewat
+                while (waktuSpawn < sekarang) {
+                    waktuSpawn = new Date(waktuSpawn.getTime() + intervalMs);
                 }
 
                 bossInterval.push({
-                    nama,
-                    waktuWIB: waktuSpawnWIB,
+                    nama: nama,
+                    waktu: waktuSpawn,
                     interval: info.interval_jam,
                     isFixed: false
                 });
             }
 
-            bossInterval.sort((a, b) => a.waktuWIB - b.waktuWIB);
+            bossInterval.sort((a, b) => a.waktu - b.waktu);
 
             // Proses boss tetap
             bossFixed = [];
             for (const bos of listFixed) {
                 const waktuBerikutnya = getNextFixedTime(bos.hari, bos.jam, bos.menit);
-                bossFixed.push({ nama: bos.nama, waktuWIB: waktuBerikutnya, interval: "Tetap", isFixed: true });
+                bossFixed.push({ nama: bos.nama, waktu: waktuBerikutnya, interval: "Tetap", isFixed: true });
             }
 
             renderTampilan();
@@ -208,7 +208,7 @@
             const semuaBoss = [...bossFixed, ...bossInterval];
 
             for (const bos of semuaBoss) {
-                const selisihMs = bos.waktuWIB - sekarang;
+                const selisihMs = bos.waktu - sekarang;
                 if (selisihMs > 0 && selisihMs <= batas10m && selisihMs > batas5m) {
                     putarAlarm(bos.nama, `⏰ ${bos.nama} muncul dalam 10 menit!`);
                 } else if (selisihMs > 0 && selisihMs <= batas5m) {
@@ -216,20 +216,20 @@
                 }
             }
 
-            const daftarTampil = semuaBoss.sort((a, b) => a.waktuWIB - b.waktuWIB);
+            const daftarTampil = semuaBoss.sort((a, b) => a.waktu - b.waktu);
             if (!daftarTampil.length) {
                 wadah.innerHTML = `<div class="text-center text-gray-400 py-10">Belum ada jadwal tersedia</div>`;
                 return;
             }
 
             wadah.innerHTML = daftarTampil.map(bos => {
-                const selisihMs = Math.max(0, bos.waktuWIB - sekarang);
+                const selisihMs = Math.max(0, bos.waktu - sekarang);
                 const jam = Math.floor(selisihMs / 3600000);
                 const menit = Math.floor((selisihMs % 3600000) / 60000);
                 const detik = Math.floor((selisihMs % 60000) / 1000);
 
-                const strWIB = bos.waktuWIB.toLocaleTimeString('id-ID', { hour:'2-digit', minute:'2-digit', hour12: false });
-                const strPHT = new Date(bos.waktuWIB.getTime() + 3600000).toLocaleTimeString('id-ID', { hour:'2-digit', minute:'2-digit', hour12: false });
+                const strWIB = bos.waktu.toLocaleTimeString('id-ID', { timeZone: 'Asia/Jakarta', hour:'2-digit', minute:'2-digit', hour12: false });
+                const strPHT = bos.waktu.toLocaleTimeString('id-ID', { timeZone: 'Asia/Manila', hour:'2-digit', minute:'2-digit', hour12: false });
 
                 const mundur = selisihMs <= 0 ? "✅ SUDAH MUNCUL!" : `${jam}j ${menit.toString().padStart(2,'0')}m ${detik.toString().padStart(2,'0')}s`;
                 const warna = selisihMs <= 0 ? "text-green-400" : selisihMs <= 5*60000 ? "text-red-400" : selisihMs <=10*60000 ? "text-orange-400" : "text-yellow-300";
