@@ -147,13 +147,21 @@
             setTimeout(() => notif.remove(), 12000);
         }
 
+        // ✅ Konversi waktu dari data bot (sudah WIB) ke objek tanggal
+        function parseWaktuWIB(strWaktuISO) {
+            const tgl = new Date(strWaktuISO);
+            // Data di bot sudah disimpan dalam zona WIB, jadi tidak perlu dikonversi lagi dari UTC
+            return new Date(tgl.getTime() - (tgl.getTimezoneOffset() * 60000));
+        }
+
         // ✅ Hitung jadwal Fixed otomatis sesuai hari WIB
         function getNextFixedTime(hariTujuan, jamTujuan, menitTujuan) {
             const sekarang = new Date();
-            const waktu = new Date(sekarang.toLocaleString('en-US', { timeZone: 'Asia/Jakarta' }));
+            const wib = new Date(sekarang.toLocaleString('en-US', { timeZone: 'Asia/Jakarta' }));
+            const waktu = new Date(wib);
             waktu.setHours(jamTujuan, menitTujuan, 0, 0);
             let selisihHari = hariTujuan - waktu.getDay();
-            if (selisihHari < 0 || (selisihHari === 0 && waktu <= sekarang)) {
+            if (selisihHari < 0 || (selisihHari === 0 && waktu <= wib)) {
                 selisihHari += 7;
             }
             waktu.setDate(waktu.getDate() + selisihHari);
@@ -173,33 +181,36 @@
             }
         }
 
-        // ✅ Proses data sinkron ke WIB / PHT
+        // ✅ Proses data sesuai format bot (WIB langsung)
         function prosesData(dataMentah) {
             bossInterval = [];
             bossFixed = [];
             const sekarang = new Date();
+            const sekarangWIB = new Date(sekarang.toLocaleString('en-US', { timeZone: 'Asia/Jakarta' }));
 
             // Hitung waktu spawn untuk boss interval
             for (const [nama, info] of Object.entries(dataMentah)) {
                 if (!info || !info.terakhir_muncul || !listInterval.includes(nama)) continue;
 
-                const waktuMatiUTC = new Date(info.terakhir_muncul);
+                // ⚠️ Perbaikan utama: Ambil waktu terakhir muncul yang sudah WIB
+                const waktuMatiWIB = parseWaktuWIB(info.terakhir_muncul);
                 const intervalMs = info.interval_jam * 3600000;
 
-                let waktuSpawnUTC = new Date(waktuMatiUTC.getTime() + intervalMs);
-                while (waktuSpawnUTC < sekarang) {
-                    waktuSpawnUTC = new Date(waktuSpawnUTC.getTime() + intervalMs);
+                let waktuSpawnWIB = new Date(waktuMatiWIB.getTime() + intervalMs);
+                while (waktuSpawnWIB < sekarangWIB) {
+                    waktuSpawnWIB = new Date(waktuSpawnWIB.getTime() + intervalMs);
                 }
 
                 bossInterval.push({
                     nama: nama,
-                    waktuSpawnUTC: waktuSpawnUTC,
+                    waktuSpawn: waktuSpawnWIB,
                     interval: info.interval_jam,
                     isFixed: false
                 });
             }
 
-            bossInterval.sort((a, b) => a.waktuSpawnUTC - b.waktuSpawnUTC);
+            // Urutkan dari yang paling cepat muncul
+            bossInterval.sort((a, b) => a.waktuSpawn - b.waktuSpawn);
 
             // Proses jadwal tetap
             for (const bos of listFixed) {
@@ -214,16 +225,17 @@
             renderTampilan();
         }
 
-        // ✅ Tampilkan + hitung mundur sesuai bot Discord
+        // ✅ Tampilkan + hitung mundur PERSIS seperti bot Discord
         function renderTampilan() {
             const wadah = document.getElementById('bossList');
             const sekarang = new Date();
+            const sekarangWIB = new Date(sekarang.toLocaleString('en-US', { timeZone: 'Asia/Jakarta' }));
             const batas10m = BATAS_ALARM_10M * 60 * 1000;
             const batas5m = BATAS_ALARM_5M * 60 * 1000;
 
             // Cek alarm untuk boss tetap
             for (const bos of bossFixed) {
-                const selisihMs = bos.waktuBerikutnya - sekarang;
+                const selisihMs = bos.waktuBerikutnya - sekarangWIB;
                 if (selisihMs > 0 && selisihMs <= batas10m && selisihMs > batas5m) {
                     putarAlarm(bos.nama, `⏰ ${bos.nama} akan muncul dalam 10 menit!`);
                 } else if (selisihMs > 0 && selisihMs <= batas5m) {
@@ -233,7 +245,7 @@
 
             // Cek alarm untuk boss interval
             for (const bos of bossInterval) {
-                const selisihMs = bos.waktuSpawnUTC - sekarang;
+                const selisihMs = bos.waktuSpawn - sekarangWIB;
                 if (selisihMs > 0 && selisihMs <= batas10m && selisihMs > batas5m) {
                     putarAlarm(bos.nama, `⏰ ${bos.nama} akan muncul dalam 10 menit!`);
                 } else if (selisihMs > 0 && selisihMs <= batas5m) {
@@ -244,7 +256,7 @@
             const fixedPrioritas = [];
             const fixedBawah = [];
             for (const bos of bossFixed) {
-                const selisihMs = bos.waktuBerikutnya - sekarang;
+                const selisihMs = bos.waktuBerikutnya - sekarangWIB;
                 const selisihMenit = selisihMs / 60000;
                 selisihMenit > -5 && selisihMenit <= 15 ? fixedPrioritas.push(bos) : fixedBawah.push(bos);
             }
@@ -261,13 +273,13 @@
                 let selisihMs, jam, menit, detik, strWIB, strPHT;
 
                 if (!bos.isFixed) {
-                    selisihMs = Math.max(0, bos.waktuSpawnUTC - sekarang);
-                    strWIB = bos.waktuSpawnUTC.toLocaleTimeString('id-ID', { timeZone: 'Asia/Jakarta', hour:'2-digit', minute:'2-digit', hour12: false });
-                    strPHT = bos.waktuSpawnUTC.toLocaleTimeString('id-ID', { timeZone: 'Asia/Manila', hour:'2-digit', minute:'2-digit', hour12: false });
+                    selisihMs = Math.max(0, bos.waktuSpawn - sekarangWIB);
+                    strWIB = bos.waktuSpawn.toLocaleTimeString('id-ID', { hour:'2-digit', minute:'2-digit', hour12: false });
+                    strPHT = new Date(bos.waktuSpawn.getTime() + 3600000).toLocaleTimeString('id-ID', { hour:'2-digit', minute:'2-digit', hour12: false });
                 } else {
-                    selisihMs = Math.max(0, bos.waktuBerikutnya - sekarang);
-                    strWIB = bos.waktuBerikutnya.toLocaleTimeString('id-ID', { timeZone: 'Asia/Jakarta', hour:'2-digit', minute:'2-digit', hour12: false });
-                    strPHT = bos.waktuBerikutnya.toLocaleTimeString('id-ID', { timeZone: 'Asia/Manila', hour:'2-digit', minute:'2-digit', hour12: false });
+                    selisihMs = Math.max(0, bos.waktuBerikutnya - sekarangWIB);
+                    strWIB = bos.waktuBerikutnya.toLocaleTimeString('id-ID', { hour:'2-digit', minute:'2-digit', hour12: false });
+                    strPHT = new Date(bos.waktuBerikutnya.getTime() + 3600000).toLocaleTimeString('id-ID', { hour:'2-digit', minute:'2-digit', hour12: false });
                 }
 
                 jam = Math.floor(selisihMs / 3600000);
