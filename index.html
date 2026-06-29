@@ -32,7 +32,6 @@
         let bossFixed = [];
         
         // ⚙️ PENGATURAN
-        const SELISIH_MENIT = 0; // ❌ TIDAK ADA TAMBAHAN WAKTU
         const BATAS_ALARM_10M = 10;
         const BATAS_ALARM_5M = 5;
         const LAMA_ALARM_DETIK = 10;
@@ -159,32 +158,31 @@
             bossInterval = [];
             const sekarang = new Date();
 
-            // ✅ LOGIKA SAMA PERSIS DENGAN BOT DISCORD
+            // ✅ LOGIKA SAMA PERSIS DENGAN BOT
             for (const [nama, info] of Object.entries(dataMentah)) {
                 if (!info) continue;
                 if (!listInterval.includes(nama)) continue;
                 if (!info.terakhir_muncul || info.terakhir_muncul === null) continue;
 
-                // Ambil waktu UTC dari database
+                // Waktu mati asli di UTC
                 const waktuMatiUTC = new Date(info.terakhir_muncul);
-                const intervalJam = info.interval_jam;
+                const intervalMs = info.interval_jam * 3600000;
 
-                // Konversi UTC ke WIB (+7 jam)
-                const waktuMatiWIB = new Date(waktuMatiUTC.getTime() + 7 * 3600000);
+                // Hitung berapa kali interval sudah lewat sejak waktu mati
+                const selisihTotalMs = sekarang.getTime() - waktuMatiUTC.getTime();
+                const jumlahInterval = Math.max(0, Math.ceil(selisihTotalMs / intervalMs));
 
-                // Tambah interval jam untuk dapat waktu spawn
-                let waktuSpawnWIB = new Date(waktuMatiWIB.getTime() + intervalJam * 3600000);
+                // Waktu spawn berikutnya = Waktu mati + jumlah interval * durasi
+                const waktuSpawnUTC = new Date(waktuMatiUTC.getTime() + jumlahInterval * intervalMs);
 
-                // Jika waktu sudah lewat, lompat ke jadwal berikutnya
-                while (waktuSpawnWIB < sekarang) {
-                    waktuSpawnWIB = new Date(waktuSpawnWIB.getTime() + intervalJam * 3600000);
-                }
+                // Konversi ke WIB & PHT
+                const waktuSpawnWIB = new Date(waktuSpawnUTC.getTime() + 7 * 3600000);
 
                 // Masukkan ke daftar
                 bossInterval.push({
                     nama: nama,
                     waktu: waktuSpawnWIB,
-                    interval: intervalJam,
+                    interval: info.interval_jam,
                     isFixed: false
                 });
             }
