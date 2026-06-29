@@ -93,20 +93,19 @@
             setTimeout(() => el.remove(), 12000);
         }
 
-        // Konversi UTC ke WIB
+        // ✅ Konversi UTC ke WIB dengan akurasi milidetik
         function utcKeWIB(strUTC) {
-            const tglUTC = new Date(strUTC);
-            return new Date(tglUTC.getTime() + 7 * 60 * 60 * 1000);
+            return new Date(strUTC);
         }
 
-        // Jadwal Boss Tetap
+        // ✅ Hitung jadwal tetap sesuai siklus mingguan
         function jadwalBerikutnya(hariTujuan, jam, menit) {
-            const sekarang = new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Jakarta" }));
-            const jadwal = new Date(sekarang);
+            const sekarangWIB = new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Jakarta" }));
+            const jadwal = new Date(sekarangWIB);
             jadwal.setHours(jam, menit, 0, 0);
-            let selisih = hariTujuan - sekarang.getDay();
-            if (selisih < 0 || (selisih === 0 && jadwal <= sekarang)) selisih += 7;
-            jadwal.setDate(sekarang.getDate() + selisih);
+            let selisihHari = hariTujuan - sekarangWIB.getDay();
+            if (selisihHari < 0 || (selisihHari === 0 && jadwal <= sekarangWIB)) selisihHari += 7;
+            jadwal.setDate(sekarangWIB.getDate() + selisihHari);
             return jadwal;
         }
 
@@ -128,22 +127,26 @@
             const sekarangWIB = new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Jakarta" }));
             const daftarSemua = [];
 
-            // Proses Boss Interval
+            // ✅ Logika baru sesuai cara bot menghitung respawn
             if (data.boss_respawn) {
                 for (const [nama, info] of Object.entries(data.boss_respawn)) {
                     if (!info || info.terakhir_muncul === null) continue;
 
-                    const terakhirMati = utcKeWIB(info.terakhir_muncul);
+                    const waktuMatiUTC = new Date(info.terakhir_muncul);
                     const intervalMs = info.interval_jam * 60 * 60 * 1000;
-                    let waktuMuncul = new Date(terakhirMati.getTime() + intervalMs);
+                    let waktuSpawnUTC = new Date(waktuMatiUTC.getTime() + intervalMs);
 
-                    while (waktuMuncul < sekarangWIB) {
-                        waktuMuncul = new Date(waktuMuncul.getTime() + intervalMs);
+                    // Majukan siklus jika sudah lewat
+                    while (waktuSpawnUTC < new Date()) {
+                        waktuSpawnUTC = new Date(waktuSpawnUTC.getTime() + intervalMs);
                     }
+
+                    // Konversi akhir ke WIB/PHT
+                    const waktuSpawnWIB = new Date(waktuSpawnUTC.getTime() + 7 * 60 * 60 * 1000);
 
                     daftarSemua.push({
                         nama: nama,
-                        waktuMuncul: waktuMuncul,
+                        waktuMuncul: waktuSpawnWIB,
                         interval: info.interval_jam,
                         tipe: "interval"
                     });
@@ -166,7 +169,7 @@
                 }
             }
 
-            // Urutkan dari yang paling dekat
+            // Urutkan dari yang paling dekat muncul
             daftarSemua.sort((a, b) => a.waktuMuncul - b.waktuMuncul);
 
             tampilkan(daftarSemua, sekarangWIB);
@@ -188,6 +191,7 @@
                 const menit = Math.floor((selisihMs % 3600000) / 60000);
                 const detik = Math.floor((selisihMs % 60000) / 1000);
 
+                // Format waktu persis seperti bot
                 const wib = bos.waktuMuncul.toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit", hour12: false });
                 const pht = new Date(bos.waktuMuncul.getTime() + 3600000).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit", hour12: false });
 
@@ -224,8 +228,7 @@
         ambilData();
         setInterval(() => {
             const sekarang = new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Jakarta" }));
-            const daftar = document.querySelectorAll(".bg-gray-800");
-            if (daftar.length > 0) ambilData();
+            tampilkan(daftarSemua || [], sekarang);
         }, 1000);
         setInterval(ambilData, 30000);
     </script>
