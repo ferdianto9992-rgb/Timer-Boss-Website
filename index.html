@@ -13,7 +13,7 @@
             <h1 class="text-3xl md:text-4xl font-bold text-yellow-400 mb-2 flex items-center justify-center gap-3">
                 <i class="fa-solid fa-clock"></i> Timer Boss Respawn
             </h1>
-            <p class="text-gray-400">Sinkron Bot Discord • Tampilan +20 Menit</p>
+            <p class="text-gray-400">Sinkron 100% dengan Bot Discord</p>
         </header>
 
         <div id="status" class="text-center text-sm text-gray-500 mb-4">Memuat data terbaru...</div>
@@ -31,8 +31,8 @@
         let bossInterval = [];
         let bossFixed = [];
         
-        // ⚙️ PENGATURAN UTAMA
-        const SELISIH_MENIT = 20; // Hanya tambah ini saja
+        // ⚙️ PENGATURAN
+        const SELISIH_MENIT = 0; // ❌ TIDAK ADA TAMBAHAN WAKTU
         const BATAS_ALARM_10M = 10;
         const BATAS_ALARM_5M = 5;
         const LAMA_ALARM_DETIK = 10;
@@ -140,7 +140,7 @@
             let selisihHari = hariTujuan - sekarang.getDay();
             if (selisihHari < 0 || (selisihHari === 0 && waktu <= sekarang)) selisihHari += 7;
             waktu.setDate(sekarang.getDate() + selisihHari);
-            return new Date(waktu.getTime() + SELISIH_MENIT * 60 * 1000);
+            return waktu;
         }
 
         async function loadData() {
@@ -159,34 +159,37 @@
             bossInterval = [];
             const sekarang = new Date();
 
+            // ✅ LOGIKA SAMA PERSIS DENGAN BOT DISCORD
             for (const [nama, info] of Object.entries(dataMentah)) {
-                // ✅ Pengecekan disederhanakan agar Titore tidak terlewat
-                if (!info || !listInterval.includes(nama)) continue;
-                if (!info.terakhir_muncul) continue;
+                if (!info) continue;
+                if (!listInterval.includes(nama)) continue;
+                if (!info.terakhir_muncul || info.terakhir_muncul === null) continue;
 
-                // ✅ Ambil waktu asli dari database
+                // Ambil waktu UTC dari database
                 const waktuMatiUTC = new Date(info.terakhir_muncul);
-                const intervalMs = info.interval_jam * 3600000;
+                const intervalJam = info.interval_jam;
 
-                // ✅ Hitung waktu spawn dasar
-                let waktuSpawn = new Date(waktuMatiUTC.getTime() + intervalMs);
+                // Konversi UTC ke WIB (+7 jam)
+                const waktuMatiWIB = new Date(waktuMatiUTC.getTime() + 7 * 3600000);
 
-                // ✅ Tambah HANYA 20 menit saja, tidak ada perubahan zona waktu tambahan
-                waktuSpawn = new Date(waktuSpawn.getTime() + SELISIH_MENIT * 60 * 1000);
+                // Tambah interval jam untuk dapat waktu spawn
+                let waktuSpawnWIB = new Date(waktuMatiWIB.getTime() + intervalJam * 3600000);
 
-                // ✅ Lompat ke jadwal berikutnya jika sudah lewat
-                while (waktuSpawn < sekarang) {
-                    waktuSpawn = new Date(waktuSpawn.getTime() + intervalMs);
+                // Jika waktu sudah lewat, lompat ke jadwal berikutnya
+                while (waktuSpawnWIB < sekarang) {
+                    waktuSpawnWIB = new Date(waktuSpawnWIB.getTime() + intervalJam * 3600000);
                 }
 
+                // Masukkan ke daftar
                 bossInterval.push({
                     nama: nama,
-                    waktu: waktuSpawn,
-                    interval: info.interval_jam,
+                    waktu: waktuSpawnWIB,
+                    interval: intervalJam,
                     isFixed: false
                 });
             }
 
+            // Urutkan dari yang paling dekat
             bossInterval.sort((a, b) => a.waktu - b.waktu);
 
             // Proses boss tetap
