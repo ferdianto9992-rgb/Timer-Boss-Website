@@ -158,31 +158,30 @@
             bossInterval = [];
             const sekarang = new Date();
 
-            // ✅ LOGIKA SAMA PERSIS DENGAN BOT
+            // ✅ LOGIKA BARU: SAMA PERSIS DENGAN BOT
             for (const [nama, info] of Object.entries(dataMentah)) {
                 if (!info) continue;
                 if (!listInterval.includes(nama)) continue;
                 if (!info.terakhir_muncul || info.terakhir_muncul === null) continue;
 
-                // Waktu mati asli di UTC
-                const waktuMatiUTC = new Date(info.terakhir_muncul);
-                const intervalMs = info.interval_jam * 3600000;
+                // Ambil waktu mentah dari database
+                const waktuMati = new Date(info.terakhir_muncul);
+                const intervalJam = info.interval_jam;
+                const intervalMs = intervalJam * 3600000;
 
-                // Hitung berapa kali interval sudah lewat sejak waktu mati
-                const selisihTotalMs = sekarang.getTime() - waktuMatiUTC.getTime();
-                const jumlahInterval = Math.max(0, Math.ceil(selisihTotalMs / intervalMs));
+                // Hitung waktu spawn berikutnya
+                let waktuSpawn = new Date(waktuMati.getTime() + intervalMs);
 
-                // Waktu spawn berikutnya = Waktu mati + jumlah interval * durasi
-                const waktuSpawnUTC = new Date(waktuMatiUTC.getTime() + jumlahInterval * intervalMs);
+                // Lompat ke jadwal berikutnya jika sudah lewat
+                while (waktuSpawn < sekarang) {
+                    waktuSpawn = new Date(waktuSpawn.getTime() + intervalMs);
+                }
 
-                // Konversi ke WIB & PHT
-                const waktuSpawnWIB = new Date(waktuSpawnUTC.getTime() + 7 * 3600000);
-
-                // Masukkan ke daftar
+                // Langsung gunakan waktu ini, tidak ada konversi tambahan
                 bossInterval.push({
                     nama: nama,
-                    waktu: waktuSpawnWIB,
-                    interval: info.interval_jam,
+                    waktu: waktuSpawn,
+                    interval: intervalJam,
                     isFixed: false
                 });
             }
@@ -229,6 +228,7 @@
                 const menit = Math.floor((selisihMs % 3600000) / 60000);
                 const detik = Math.floor((selisihMs % 60000) / 1000);
 
+                // Tampilkan langsung sesuai zona waktu perangkat = WIB
                 const strWIB = bos.waktu.toLocaleTimeString('id-ID', { timeZone: 'Asia/Jakarta', hour:'2-digit', minute:'2-digit', hour12: false });
                 const strPHT = bos.waktu.toLocaleTimeString('id-ID', { timeZone: 'Asia/Manila', hour:'2-digit', minute:'2-digit', hour12: false });
 
