@@ -14,16 +14,15 @@
                 <i class="fa-solid fa-clock"></i> Timer Boss Respawn
             </h1>
             <p class="text-gray-400">Sinkron penuh dengan Bot Discord • WIB / PHT</p>
+            <div id="status" class="text-center text-sm text-green-400 mt-2">✅ Data terbaru dimuat</div>
         </header>
-
-        <div id="status" class="text-center text-sm text-gray-500 mb-4">Memuat data terbaru...</div>
 
         <div id="bossList" class="grid gap-4">
             <div class="text-center text-gray-400 py-10">Menyiapkan jadwal...</div>
         </div>
 
         <footer class="text-center text-gray-500 text-sm mt-10">
-            Data diperbarui setiap 30 detik • Waktu: WIB = UTC+7 | PHT = UTC+8
+            Data diperbarui setiap 30 detik • Diurutkan dari yang paling dekat muncul
         </footer>
     </div>
 
@@ -96,8 +95,8 @@
             setTimeout(() => notif.remove(), 12000);
         }
 
-        // Hitung jadwal Fixed sesuai format baru
-        function getNextFixedTimes(hariTujuan, jamTujuan, menitTujuan) {
+        // Hitung jadwal Fixed
+        function getNextFixedTime(hariTujuan, jamTujuan, menitTujuan) {
             const sekarangWIB = new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Jakarta" }));
             const waktu = new Date(sekarangWIB);
             waktu.setHours(jamTujuan, menitTujuan, 0, 0);
@@ -115,17 +114,18 @@
                 const data = await res.json();
                 prosesData(data);
                 document.getElementById('status').textContent = "✅ Data terbaru dimuat";
+                document.getElementById('status').className = "text-center text-sm text-green-400 mt-2";
             } catch (err) {
-                document.getElementById('status').innerHTML = `❌ ${err.message}`;
+                document.getElementById('status').textContent = `❌ ${err.message}`;
+                document.getElementById('status').className = "text-center text-sm text-red-400 mt-2";
             }
         }
 
         function prosesData(data) {
             const sekarangWIB = new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Jakarta" }));
-            const daftarInterval = [];
-            const daftarFixed = [];
+            const semuaBoss = [];
 
-            // Proses Boss Interval (UTC+0 → dikonversi otomatis ke WIB)
+            // Proses Boss Interval
             for (const [nama, info] of Object.entries(data.boss_respawn)) {
                 if (!info || !info.terakhir_muncul) continue;
 
@@ -133,37 +133,36 @@
                 const intervalMs = info.interval_jam * 3600000;
                 let waktuSpawnUTC = new Date(waktuMatiUTC.getTime() + intervalMs);
 
-                // Pastikan waktu sudah lewat, lompat ke jadwal berikutnya
                 while (waktuSpawnUTC < new Date()) {
                     waktuSpawnUTC = new Date(waktuSpawnUTC.getTime() + intervalMs);
                 }
 
-                daftarInterval.push({
+                semuaBoss.push({
                     nama: nama,
-                    waktuSpawnUTC: waktuSpawnUTC,
+                    waktuSpawn: waktuSpawnUTC,
                     interval: info.interval_jam,
                     isFixed: false
                 });
             }
 
-            // Urutkan dari yang paling dekat muncul
-            daftarInterval.sort((a, b) => a.waktuSpawnUTC - b.waktuSpawnUTC);
-
-            // Proses Boss Fixed sesuai struktur baru
+            // Proses Boss Fixed
             for (const [nama, jadwalList] of Object.entries(data.boss_fixed)) {
                 for (const jadwal of jadwalList) {
                     const [jam, menit] = jadwal.waktu.split(":").map(Number);
-                    const waktuBerikutnya = getNextFixedTimes(jadwal.hari, jam, menit);
-                    daftarFixed.push({
+                    const waktuBerikutnya = getNextFixedTime(jadwal.hari, jam, menit);
+                    semuaBoss.push({
                         nama: nama,
-                        waktuBerikutnya: waktuBerikutnya,
+                        waktuSpawn: waktuBerikutnya,
                         interval: "Tetap",
                         isFixed: true
                     });
                 }
             }
 
-            renderTampilan([...daftarFixed, ...daftarInterval], sekarangWIB);
+            // ✅ URUTKAN: Dari waktu terdekat ke terlama
+            semuaBoss.sort((a, b) => a.waktuSpawn - b.waktuSpawn);
+
+            renderTampilan(semuaBoss, sekarangWIB);
         }
 
         // Tampilkan ke Halaman
@@ -181,13 +180,13 @@
                 let selisihMs, jam, menit, detik, strWIB, strPHT;
 
                 if (!bos.isFixed) {
-                    selisihMs = Math.max(0, bos.waktuSpawnUTC - sekarangWIB);
-                    strWIB = bos.waktuSpawnUTC.toLocaleTimeString("id-ID", { timeZone: "Asia/Jakarta", hour: "2-digit", minute: "2-digit", hour12: false });
-                    strPHT = bos.waktuSpawnUTC.toLocaleTimeString("id-ID", { timeZone: "Asia/Manila", hour: "2-digit", minute: "2-digit", hour12: false });
+                    selisihMs = Math.max(0, bos.waktuSpawn - sekarangWIB);
+                    strWIB = bos.waktuSpawn.toLocaleTimeString("id-ID", { timeZone: "Asia/Jakarta", hour: "2-digit", minute: "2-digit", hour12: false });
+                    strPHT = bos.waktuSpawn.toLocaleTimeString("id-ID", { timeZone: "Asia/Manila", hour: "2-digit", minute: "2-digit", hour12: false });
                 } else {
-                    selisihMs = Math.max(0, bos.waktuBerikutnya - sekarangWIB);
-                    strWIB = bos.waktuBerikutnya.toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit", hour12: false });
-                    strPHT = new Date(bos.waktuBerikutnya.getTime() + 3600000).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit", hour12: false });
+                    selisihMs = Math.max(0, bos.waktuSpawn - sekarangWIB);
+                    strWIB = bos.waktuSpawn.toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit", hour12: false });
+                    strPHT = new Date(bos.waktuSpawn.getTime() + 3600000).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit", hour12: false });
                 }
 
                 jam = Math.floor(selisihMs / 3600000);
@@ -215,7 +214,7 @@
                     <div class="flex-1">
                         <h3 class="text-xl font-semibold text-white flex items-center gap-2">${bos.nama} ${label}</h3>
                         <p class="text-sm text-gray-400">Interval: ${bos.interval} jam</p>
-                        <p class="mt-1 text-sm">🇮🇩 ${strWIB} WIB &nbsp;&nbsp; 🇵🇭 ${strPHT} PHT</p>
+                        <p class="mt-1 text-sm">ID: ${strWIB} WIB &nbsp;&nbsp; PH: ${strPHT} PHT</p>
                     </div>
                     <div class="text-right">
                         <p class="text-lg font-bold ${warna} whitespace-nowrap">${mundur}</p>
